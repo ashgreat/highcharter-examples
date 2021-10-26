@@ -1,0 +1,213 @@
+---
+title: "Highcharter Examples"
+output:
+  html_notebook:
+    theme: cosmo
+editor_options:
+  chunk_output_type: inline
+---
+
+```{r setup}
+library(tidyverse)
+library(highcharter)
+
+d1 <- haven::read_dta(here::here("data", "tech_co_cstat.dta"))
+```
+
+## Bar chart
+
+Create a bar chart of Facebook profits by fiscal year
+
+```{r}
+d1 %>% 
+  filter(tic == "FB") %>% 
+  hchart("column" ,hcaes(x = fyear, y = oibdp)) %>% 
+  hc_add_theme(hc_theme_monokai())
+```
+
+*Play around with a few themes and then finalize one theme:* 
+https://jkunst.com/highcharter/articles/themes.html#themes-1
+https://jkunst.com/highcharter/reference/index.html#section-themes
+
+
+When you hover mouse over the bars, you will notice the tooltip shows "Series 1" rather than the variable name `oibdp`. Admittedly, both "Series 1" and `oibdp` are equally obtuse but we can do better. Let's label the series "Operating Profits"
+
+
+```{r}
+d1 %>% 
+  filter(tic == "FB") %>% 
+  hchart("column" ,hcaes(x = fyear, y = oibdp)) %>% 
+  hc_tooltip(
+    headerFormat = "<b>Fiscal Year: {point.key}</b> <br>",
+    pointFormat = "<b>Operating Profit: {point.y}</b>") %>% 
+  hc_add_theme(hc_theme_monokai())
+```
+
+Change the axes titles
+
+```{r}
+d1 %>% 
+  filter(tic == "FB") %>% 
+  hchart("column" ,hcaes(x = fyear, y = oibdp)) %>% 
+  hc_tooltip(
+    headerFormat = "<b>Fiscal Year: {point.key}</b> <br>",
+    pointFormat = "<b>Operating Profit: {point.y}</b>") %>% 
+  hc_xAxis(title = list(text = "Fiscal Year")) %>% 
+  hc_yAxis(title = list(text = "Operating Income in Million USD")) %>% 
+  hc_add_theme(hc_theme_monokai())
+```
+
+Add title and subtitle
+
+```{r}
+d1 %>% 
+  filter(tic == "FB") %>% 
+  hchart("column" ,hcaes(x = fyear, y = oibdp)) %>% 
+  hc_tooltip(
+    headerFormat = "<b>Fiscal Year: {point.key}</b> <br>",
+    pointFormat = "<b>Operating Profit: {point.y}</b>") %>% 
+  hc_xAxis(title = list(text = "Fiscal Year")) %>% 
+  hc_yAxis(title = list(text = "Operating Income in Million USD")) %>% 
+  hc_title(text = "Evil = Profitable??", align = "center") %>%
+  hc_subtitle(text = "Despite all the scandals, Facebook operating income is consistently growing",
+              align = "center") %>% 
+  hc_add_theme(hc_theme_monokai())
+```
+
+
+Add an emoji to the title. This requires `useHTML` set to `TRUE` inside `hc_title()`. You can get a relevant decimal code for any emoji online. For example, check this out:
+https://www.w3schools.com/charsets/ref_emoji.asp
+
+
+```{r}
+d1 %>% 
+  filter(tic == "FB") %>% 
+  hchart("column" ,hcaes(x = fyear, y = oibdp)) %>% 
+  hc_tooltip(
+    headerFormat = "<b>Fiscal Year: {point.key}</b> <br>",
+    pointFormat = "<b>Operating Profit: {point.y}</b>") %>% 
+  hc_xAxis(title = list(text = "Fiscal Year")) %>% 
+  hc_yAxis(title = list(text = "Operating Income in Million USD")) %>% 
+  hc_title(text = "Evil = Profitable?? <span>&#128520;</span>",
+           useHTML = TRUE, align = "center") %>%
+  hc_subtitle(text = "Despite all the scandals, Facebook operating income is consistently growing",
+              align = "center") %>% 
+  hc_add_theme(hc_theme_monokai())
+```
+
+## Line graph
+
+Plot a line graph of Apple's leverage ratio over the years.
+
+The leverage ratio is given by `(dltt + dlc) / at` where `dltt` is long-term debt and `dlc` is short-term debt. If any of these variables is missing, we should assume they are 0.
+
+```{r}
+d1 %>% 
+  filter(tic == "AAPL") %>% 
+  mutate(leverage = (replace_na(dltt, 0) + replace_na(dlc, 0))/ at,
+         leverage = round(leverage, 2)) %>% 
+  hchart("line", hcaes(x = datadate, y = leverage)) %>% 
+  hc_add_theme(hc_theme_bloom())
+```
+
+## Scatterplot
+
+Create a scatterplot of profit by sales
+
+```{r}
+d1 %>% 
+  hchart("scatter", hcaes(x = sale, y = oibdp, group = conm)) %>% 
+  hc_add_theme(hc_theme_538())
+```
+
+Here, the colors are repeating because the color palette doesn't have 10 unique colors. We can pass our own colors using `hc_colors()`. I will use `viridis` color palettes because it has 256 colors.
+
+```{r}
+cols <- viridisLite::viridis(10, option = "H")
+cols <- substr(cols, 0, 7)
+
+d1 %>% 
+  hchart("scatter", hcaes(x = sale, y = oibdp, group = conm)) %>% 
+  hc_add_theme(hc_theme_538()) %>% 
+  hc_colors(cols)
+```
+
+Use `pals` package for more discrete colors:
+https://rdrr.io/cran/pals/man/discrete.html
+
+
+```{r}
+cols <- pals::alphabet() %>% unname() 
+# unname will remove the names from the vector. Highcharter throws an error if you pass a names vector with colors.
+
+d1 %>% 
+  hchart("scatter", hcaes(x = sale, y = oibdp, group = conm)) %>% 
+  hc_add_theme(hc_theme_538()) %>% 
+  hc_colors(cols)
+```
+
+## Heatmap
+
+We did not see static heatmaps with `ggplot2` so let's learn how to get them using highcharter
+
+To create a heatmap, highcharter needs a data frame or a matrix. A matrix is a data object similar to a data frame as it is 2D. However, a matrix must have ALL its elements of the same class. This is different from a data frame where every column must have elements of the same class but two columns may have different classes.
+
+The most common heatmap is a correlation plot. `cor()` function from base R outputs a matrix of correlations. Here we visualize correlations between multiple variables in the data set.
+
+```{r}
+d1 %>%
+  select(sale, oibdp, cogs, at, xrd, mkvalt, che, capx) %>% 
+  drop_na() %>% 
+  cor() %>% 
+  hchart() %>% 
+    hc_colorAxis(
+    stops = color_stops(colors = c("#000004FF", 
+                                   "#56106EFF", 
+                                   "#BB3754FF", 
+                                   "#F98C0AFF", 
+                                   "#FCFFA4FF"))
+    )
+```
+
+Why are all the correlations positive? For example, why is the correlation between profits (`oibdp`) and the costs (`cogs`) positive? Shouldn't that be negative?
+
+
+```{r}
+d2 <- d1 %>%
+  select(sale, oibdp, cogs, at, xrd, mkvalt, che, capx) %>% 
+  drop_na()
+
+d2 %>% 
+  mutate(across(everything(), ~.x/d2$sale)) %>% 
+  select(-sale) %>% 
+  cor() %>%
+  hchart()
+```
+
+JB has given an example of heatmap using a data frame here:
+https://jkunst.com/highcharter/articles/highcharter.html
+
+## Pie chart
+
+Let's create a pie chart for all the profits in the fiscal year 2020. This will be an ugly pie chart because there are 10 companies in the data. But interactive pie charts make life a little bit easier!
+
+```{r}
+d1 %>% 
+  filter(fyear == 2020) %>%
+  arrange(oibdp) %>% 
+  mutate(conm = str_to_title(conm)) %>% 
+  hchart("pie", hcaes(x = conm, y = oibdp))
+```
+
+Change the tooltip to show the series name:
+
+```{r}
+d1 %>% 
+  filter(fyear == 2020) %>%
+  arrange(oibdp) %>% 
+  mutate(conm = str_to_title(conm)) %>% 
+  hchart("pie", hcaes(x = conm, y = oibdp), name = "Operating Profit")
+```
+
+
+
